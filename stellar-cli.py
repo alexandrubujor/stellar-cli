@@ -1,31 +1,3 @@
-"""
-This cli client should support the following operations:
-* create wallet and save keys (requires wallet_file)
-* add trust for asset to wallet (requires wallet_file, asset code, asset issuer address)
-* display balances (requires wallet_file)
-* send payments (requires wallet_file, asset code, asset issuer address, destination address)
-* display transactions (requires wallet_file)
-
-Should support both test and production networking (-t switch)
-Should support custom horizon endpoint (later)
-
-Options:
--t : test mode
--w wallet_file : wallet file path
--a, --asset : asset code
--i, --issuer : issuer wallet address
--d, --destination : wallet destination address
-
-Commands:
-create_wallet
-add_trust
-list_balances
-send_payment
-list_transactions
-
-"""
-
-
 import argparse
 import sys
 import stellarops.operations as operations
