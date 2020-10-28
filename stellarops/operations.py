@@ -7,6 +7,8 @@ from stellar_sdk.exceptions import BaseHorizonError
 from .fileops import load_wallet, write_wallet
 import os
 import json
+import toml
+import urllib.request
 
 
 def get_network_settings(test_mode):
@@ -127,3 +129,15 @@ def send_payment(wallet_file, asset, issuer, amount, destination, test_mode=True
         print("{}".format(json.dumps(transaction_resp, indent=4)))
     except BaseHorizonError as e:
         print(f"Error: {e}")
+
+
+def get_asset_data_from_domain(asset_code, asset_domain):
+    toml_file = "https://{}/.well-known/stellar.toml".format(asset_domain)
+    toml_string = urllib.request.urlopen(toml_file).read().decode()
+    toml_data = toml.loads(toml_string)
+    currencies = toml_data.get("CURRENCIES")
+    for c in currencies:
+        if c.get("code") == asset_code:
+            asset_issuer = c.get("issuer")
+            return asset_code, asset_issuer, asset_domain
+    return None, None, None

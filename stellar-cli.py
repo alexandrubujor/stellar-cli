@@ -39,8 +39,22 @@ if __name__ == "__main__":
             print("Missing asset code.")
             sys.exit(1)
         if issuer is None:
-            print("Missing issuer address.")
-            sys.exit(1)
+            if '@' in asset:
+                asset_code, asset_domain = asset.split('@')
+                asset_code, asset_issuer, asset_domain = operations.get_asset_data_from_domain(asset_code=asset_code,
+                                                                                               asset_domain=asset_domain)
+                if asset_code is None:
+                    print("Could not identify token on this domain.")
+                    sys.exit(1)
+                else:
+                    print("We discovered the following token: {} @ {} issued by {}".format(asset_code,
+                                                                                           asset_domain,
+                                                                                           asset_issuer))
+                    asset = asset_code
+                    issuer = asset_issuer
+            else:
+                print("Missing issuer address.")
+                sys.exit(1)
         operations.add_trust(wallet_file=wallet_file, asset=asset, issuer=issuer, test_mode=test_mode)
     elif command == COMMAND_LIST_BALANCES:
         operations.list_balances(wallet_file=wallet_file, test_mode=test_mode)
@@ -49,6 +63,19 @@ if __name__ == "__main__":
         issuer = args.issuer
         destination = args.destination
         amount = args.amount
+        if asset is not None and '@' in asset:
+            asset_code, asset_domain = asset.split('@')
+            asset_code, asset_issuer, asset_domain = operations.get_asset_data_from_domain(asset_code=asset_code,
+                                                                                           asset_domain=asset_domain)
+            if asset_code is None:
+                print("Could not identify token on this domain.")
+                sys.exit(1)
+            else:
+                print("We discovered the following token: {} @ {} issued by {}".format(asset_code,
+                                                                                       asset_domain,
+                                                                                       asset_issuer))
+                asset = asset_code
+                issuer = asset_issuer
         if destination is None:
             print("Missing destination address.")
             sys.exit(1)
