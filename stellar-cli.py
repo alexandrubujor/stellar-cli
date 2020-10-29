@@ -21,17 +21,24 @@ if __name__ == "__main__":
     parser.add_argument("command", type=str, choices=SUPPORTED_COMMANDS.keys(),
                         help="command for the client. cupported options are: {}".format(', '.join(SUPPORTED_COMMANDS.keys())))
     parser.add_argument("-t", "--test", help="use test network", action="store_true")
-    parser.add_argument("-w", "--wallet", type=str, required=True, help="path to wallet file")
     parser.add_argument("-a", "--asset", type=str, help="asset code")
     parser.add_argument("-i", "--issuer", type=str, help="issuer wallet address")
     parser.add_argument("-p", "--amount", type=float, help="payment amount")
     parser.add_argument("-d", "--destination", type=str, help="destination wallet address")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-w", "--wallet", type=str, help="path to wallet file")
+    group.add_argument("--trezor", action="store_true", help="use an attached Trezor")
     args = parser.parse_args()
     test_mode = args.test
     command = args.command
     wallet_file = args.wallet
+    trezor_mode = args.trezor
     if command == COMMAND_CREATE_WALLET:
-        operations.create_stellar_wallet(wallet_file=wallet_file)
+        if not trezor_mode:
+            operations.create_stellar_wallet(wallet_file=wallet_file)
+        else:
+            print("Trezor wallet must be already initialized. Will retrieve public key wallet now")
+            operations.retrieve_trezor_public_key()
     elif command == COMMAND_ADD_TRUST:
         asset = args.asset
         issuer = args.issuer
@@ -55,9 +62,10 @@ if __name__ == "__main__":
             else:
                 print("Missing issuer address.")
                 sys.exit(1)
-        operations.add_trust(wallet_file=wallet_file, asset=asset, issuer=issuer, test_mode=test_mode)
+        operations.add_trust(wallet_file=wallet_file, asset=asset, issuer=issuer, test_mode=test_mode,
+                             trezor_mode=trezor_mode)
     elif command == COMMAND_LIST_BALANCES:
-        operations.list_balances(wallet_file=wallet_file, test_mode=test_mode)
+        operations.list_balances(wallet_file=wallet_file, test_mode=test_mode, trezor_mode=trezor_mode)
     elif command == COMMAND_SEND_PAYMENT:
         asset = args.asset
         issuer = args.issuer
@@ -84,7 +92,8 @@ if __name__ == "__main__":
             sys.exit(1)
         operations.send_payment(wallet_file=wallet_file, asset=asset, issuer=issuer, amount=amount,
                                 destination=destination,
-                                test_mode=test_mode)
+                                test_mode=test_mode,
+                                trezor_mode=trezor_mode)
     elif command == COMMAND_LIST_TRANSACTIONS:
-        operations.list_transactions(wallet_file=wallet_file, test_mode=test_mode)
+        operations.list_transactions(wallet_file=wallet_file, test_mode=test_mode, trezor_mode=trezor_mode)
 
