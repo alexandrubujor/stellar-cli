@@ -1,4 +1,4 @@
-# stellar-cli - CLI tool for stellar ledger #
+# stellar-cli - CLI tool for Stellar with support for custom tokens #
 
 ## Overview ##
 
