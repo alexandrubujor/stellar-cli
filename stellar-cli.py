@@ -8,6 +8,7 @@ COMMAND_ADD_TRUST = "add_trust"
 COMMAND_LIST_BALANCES = "list_balances"
 COMMAND_SEND_PAYMENT = "send_payment"
 COMMAND_LIST_TRANSACTIONS = "list_transactions"
+COMMAND_LIST_ASSET_BALANCE = "list_asset_balance"
 
 SUPPORTED_COMMANDS = {
     COMMAND_CREATE_WALLET: "",
@@ -16,6 +17,7 @@ SUPPORTED_COMMANDS = {
     COMMAND_LIST_BALANCES: "",
     COMMAND_SEND_PAYMENT: "",
     COMMAND_LIST_TRANSACTIONS: "",
+    COMMAND_LIST_ASSET_BALANCE: "",
 }
 
 if __name__ == "__main__":
@@ -27,6 +29,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--issuer", type=str, help="issuer wallet address")
     parser.add_argument("-p", "--amount", type=float, help="payment amount")
     parser.add_argument("-d", "--destination", type=str, help="destination wallet address")
+    parser.add_argument("--qrlink", action="store_true", help="generate qr code link")
     group_wallet = parser.add_mutually_exclusive_group(required=True)
     group_wallet.add_argument("-w", "--wallet", type=str, help="path to wallet file")
     group_wallet.add_argument("--trezor", action="store_true", help="use an attached Trezor")
@@ -39,17 +42,19 @@ if __name__ == "__main__":
     command = args.command
     wallet_file = args.wallet
     trezor_mode = args.trezor
+    generate_qr_code_link = args.qrlink
     if command == COMMAND_CREATE_WALLET:
         if not trezor_mode:
-            operations.create_stellar_wallet(wallet_file=wallet_file)
+            operations.create_stellar_wallet(wallet_file=wallet_file, generate_qr_code_link=generate_qr_code_link)
         else:
             print("Trezor wallet must be already initialized. Will retrieve public key wallet now")
-            operations.retrieve_trezor_public_key()
+            operations.retrieve_trezor_public_key(generate_qr_code_link=generate_qr_code_link)
     elif command == COMMAND_SHOW_WALLET_ADDRESS:
         if not trezor_mode:
-            operations.retrieve_stellar_wallet_public_key(wallet_file=wallet_file)
+            operations.retrieve_stellar_wallet_public_key(wallet_file=wallet_file,
+                                                          generate_qr_code_link=generate_qr_code_link)
         else:
-            operations.retrieve_trezor_public_key()
+            operations.retrieve_trezor_public_key(generate_qr_code_link=generate_qr_code_link)
     elif command == COMMAND_ADD_TRUST:
         asset = args.asset
         issuer = args.issuer
@@ -58,18 +63,7 @@ if __name__ == "__main__":
             sys.exit(1)
         if issuer is None:
             if '@' in asset:
-                asset_code, asset_domain = asset.split('@')
-                asset_code, asset_issuer, asset_domain = operations.get_asset_data_from_domain(asset_code=asset_code,
-                                                                                               asset_domain=asset_domain)
-                if asset_code is None:
-                    print("Could not identify token on this domain.")
-                    sys.exit(1)
-                else:
-                    print("We discovered the following token: {} @ {} issued by {}".format(asset_code,
-                                                                                           asset_domain,
-                                                                                           asset_issuer))
-                    asset = asset_code
-                    issuer = asset_issuer
+                asset, issuer, domain = operations.get_asset_from_domain(asset)
             else:
                 print("Missing issuer address.")
                 sys.exit(1)
@@ -77,6 +71,20 @@ if __name__ == "__main__":
                              trezor_mode=trezor_mode)
     elif command == COMMAND_LIST_BALANCES:
         operations.list_balances(wallet_file=wallet_file, test_mode=test_mode, trezor_mode=trezor_mode)
+    elif command == COMMAND_LIST_ASSET_BALANCE:
+        asset = args.asset
+        issuer = args.issuer
+        domain = None
+        if asset is not None and issuer is None and '@' in asset:
+            asset, issuer, domain = operations.get_asset_from_domain(asset_with_domain=asset)
+            if asset is None:
+                print("Could not identify asset. Please provide issuer or use -a ASSET_CODE@domain.com format")
+                sys.exit(1)
+        if asset is not None and issuer is None:
+            print("Could not identify asset. Please provide issuer or use -a ASSET_CODE@domain.com format")
+            sys.exit(1)
+        operations.list_asset_balance(wallet_file=wallet_file, asset=asset, issuer=issuer, domain=domain,
+                                      test_mode=test_mode, trezor_mode=trezor_mode)
     elif command == COMMAND_SEND_PAYMENT:
         asset = args.asset
         issuer = args.issuer
@@ -85,19 +93,13 @@ if __name__ == "__main__":
         memo_text = args.memo_text
         memo_id = args.memo_id
         memo_hash = args.memo_hash
-        if asset is not None and '@' in asset:
-            asset_code, asset_domain = asset.split('@')
-            asset_code, asset_issuer, asset_domain = operations.get_asset_data_from_domain(asset_code=asset_code,
-                                                                                           asset_domain=asset_domain)
-            if asset_code is None:
-                print("Could not identify token on this domain.")
+        if asset is not None and issuer is None and '@' in asset:
+            asset, issuer, domain = operations.get_asset_from_domain(asset_with_domain=asset)
+            if asset is None:
                 sys.exit(1)
-            else:
-                print("We discovered the following token: {} @ {} issued by {}".format(asset_code,
-                                                                                       asset_domain,
-                                                                                       asset_issuer))
-                asset = asset_code
-                issuer = asset_issuer
+        if asset is not None and issuer is None:
+            print("Could not identify asset. Please provide issuer or use -a ASSET_CODE@domain.com format")
+            sys.exit(1)
         if destination is None:
             print("Missing destination address.")
             sys.exit(1)

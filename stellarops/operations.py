@@ -30,7 +30,7 @@ def get_network_settings(test_mode):
         }
 
 
-def create_stellar_wallet(wallet_file):
+def create_stellar_wallet(wallet_file, generate_qr_code_link=False):
     if os.path.exists(wallet_file):
         print("Error: Wallet file already exists! Will not overwrite it for security reasons.")
         return
@@ -44,11 +44,16 @@ def create_stellar_wallet(wallet_file):
             "message": "A new keypair was generated for you and saved in {}. Initialize it by sending at least 1 XLM to {}".format(wallet_file, public_key)
         }
         print(json.dumps(response, indent=4))
+        if generate_qr_code_link:
+            print(generate_qr_code_url(public_key))
 
 
-def retrieve_stellar_wallet_public_key(wallet_file):
+def retrieve_stellar_wallet_public_key(wallet_file, generate_qr_code_link=False):
     (private_key, public_key) = load_wallet(wallet_file=wallet_file)
     print(public_key)
+    if generate_qr_code_link:
+        print(generate_qr_code_url(public_key))
+
 
 
 def add_trust(wallet_file, asset, issuer, test_mode=True, trezor_mode=False):
@@ -97,6 +102,31 @@ def list_balances(wallet_file, test_mode=True, trezor_mode=False):
     response = server.accounts().account_id(account_id=k.public_key).call()
     balances = response.get("balances")
     print(json.dumps(balances, indent=4))
+
+
+def list_asset_balance(wallet_file, asset, issuer, domain=None, test_mode=False, trezor_mode=False):
+    network_settings = get_network_settings(test_mode=test_mode)
+    if not trezor_mode:
+        (private_key, public_key) = load_wallet(wallet_file=wallet_file)
+        k = Keypair.from_secret(secret=private_key)
+    else:
+        public_key = get_trezor_public_key()
+        k = Keypair.from_public_key(public_key=public_key)
+    server = Server(network_settings.get("horizon_url"))
+    response = server.accounts().account_id(account_id=k.public_key).call()
+    balances = response.get("balances")
+    for b in balances:
+        balance = b.get("balance")
+        asset_code = b.get("asset_code")
+        asset_issuer = b.get("asset_issuer")
+        if asset_code == asset and asset_issuer == issuer:
+            if asset_code is None and asset_issuer is None:
+                print("{} XLM".format(balance))
+            else:
+                if domain is None:
+                    print("{} {} issued by {}".format(balance, asset_code, asset_issuer))
+                else:
+                    print("{} {}@{} issued by {}".format(balance, asset_code, domain, asset_issuer))
 
 
 def list_transactions(wallet_file, test_mode=True, trezor_mode=False):
@@ -195,9 +225,17 @@ def get_trezor_public_key():
     r = c.call(m)
     return r.address
 
+def generate_qr_code_url(public_key):
+    url = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={}".format(public_key)
+    return url
 
-def retrieve_trezor_public_key():
+
+def retrieve_trezor_public_key(generate_qr_code_link=False):
+    public_key = get_trezor_public_key()
     print(get_trezor_public_key())
+    if generate_qr_code_link:
+        print(generate_qr_code_url(public_key))
+
 
 
 def sign_trezor_transaction(transaction, public_key, network_passphrase):
@@ -209,3 +247,20 @@ def sign_trezor_transaction(transaction, public_key, network_passphrase):
     s_element = Xdr.types.DecoratedSignature(public_key.signature_hint(), signature)
     transaction.signatures.append(s_element)
     return transaction
+
+
+def get_asset_from_domain(asset_with_domain):
+    if asset_with_domain is not None and '@' in asset_with_domain:
+        asset_code, asset_domain = asset_with_domain.split('@')
+        asset_code, asset_issuer, asset_domain = get_asset_data_from_domain(asset_code=asset_code,
+                                                                            asset_domain=asset_domain)
+        if asset_code is None:
+            print("Could not identify token on this domain.")
+            return None, None, None
+        else:
+            print("We discovered the following token: {} @ {} issued by {}".format(asset_code,
+                                                                                   asset_domain,
+                                                                                   asset_issuer))
+            asset = asset_code
+            issuer = asset_issuer
+            return asset, issuer, asset_domain
