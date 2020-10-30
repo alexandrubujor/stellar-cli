@@ -3,6 +3,7 @@ import sys
 import stellarops.operations as operations
 
 COMMAND_CREATE_WALLET = "create_wallet"
+COMMAND_SHOW_WALLET_ADDRESS = "show_wallet_address"
 COMMAND_ADD_TRUST = "add_trust"
 COMMAND_LIST_BALANCES = "list_balances"
 COMMAND_SEND_PAYMENT = "send_payment"
@@ -10,10 +11,11 @@ COMMAND_LIST_TRANSACTIONS = "list_transactions"
 
 SUPPORTED_COMMANDS = {
     COMMAND_CREATE_WALLET: "",
+    COMMAND_SHOW_WALLET_ADDRESS: "",
     COMMAND_ADD_TRUST: "",
     COMMAND_LIST_BALANCES: "",
     COMMAND_SEND_PAYMENT: "",
-    COMMAND_LIST_TRANSACTIONS: ""
+    COMMAND_LIST_TRANSACTIONS: "",
 }
 
 if __name__ == "__main__":
@@ -25,9 +27,13 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--issuer", type=str, help="issuer wallet address")
     parser.add_argument("-p", "--amount", type=float, help="payment amount")
     parser.add_argument("-d", "--destination", type=str, help="destination wallet address")
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-w", "--wallet", type=str, help="path to wallet file")
-    group.add_argument("--trezor", action="store_true", help="use an attached Trezor")
+    group_wallet = parser.add_mutually_exclusive_group(required=True)
+    group_wallet.add_argument("-w", "--wallet", type=str, help="path to wallet file")
+    group_wallet.add_argument("--trezor", action="store_true", help="use an attached Trezor")
+    group_memo = parser.add_mutually_exclusive_group(required=False)
+    group_memo.add_argument("--memo-id", type=int, help="ID memo for Stellar transaction")
+    group_memo.add_argument("--memo-text", type=str, help="Text memo for Stellar transaction")
+    group_memo.add_argument("--memo-hash", type=str, help="Hash memo for Stellar transaction")
     args = parser.parse_args()
     test_mode = args.test
     command = args.command
@@ -38,6 +44,11 @@ if __name__ == "__main__":
             operations.create_stellar_wallet(wallet_file=wallet_file)
         else:
             print("Trezor wallet must be already initialized. Will retrieve public key wallet now")
+            operations.retrieve_trezor_public_key()
+    elif command == COMMAND_SHOW_WALLET_ADDRESS:
+        if not trezor_mode:
+            operations.retrieve_stellar_wallet_public_key(wallet_file=wallet_file)
+        else:
             operations.retrieve_trezor_public_key()
     elif command == COMMAND_ADD_TRUST:
         asset = args.asset
@@ -71,6 +82,9 @@ if __name__ == "__main__":
         issuer = args.issuer
         destination = args.destination
         amount = args.amount
+        memo_text = args.memo_text
+        memo_id = args.memo_id
+        memo_hash = args.memo_hash
         if asset is not None and '@' in asset:
             asset_code, asset_domain = asset.split('@')
             asset_code, asset_issuer, asset_domain = operations.get_asset_data_from_domain(asset_code=asset_code,
@@ -91,7 +105,7 @@ if __name__ == "__main__":
             print("Missing amount.")
             sys.exit(1)
         operations.send_payment(wallet_file=wallet_file, asset=asset, issuer=issuer, amount=amount,
-                                destination=destination,
+                                destination=destination, memo_text=memo_text, memo_id=memo_id, memo_hash=memo_hash,
                                 test_mode=test_mode,
                                 trezor_mode=trezor_mode)
     elif command == COMMAND_LIST_TRANSACTIONS:

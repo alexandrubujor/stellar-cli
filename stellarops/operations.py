@@ -46,6 +46,11 @@ def create_stellar_wallet(wallet_file):
         print(json.dumps(response, indent=4))
 
 
+def retrieve_stellar_wallet_public_key(wallet_file):
+    (private_key, public_key) = load_wallet(wallet_file=wallet_file)
+    print(public_key)
+
+
 def add_trust(wallet_file, asset, issuer, test_mode=True, trezor_mode=False):
     network_settings = get_network_settings(test_mode=test_mode)
     v1_mode = True
@@ -107,7 +112,8 @@ def list_transactions(wallet_file, test_mode=True, trezor_mode=False):
     print(json.dumps(response, indent=4))
 
 
-def send_payment(wallet_file, asset, issuer, amount, destination, test_mode=True, trezor_mode=False):
+def send_payment(wallet_file, asset, issuer, amount, destination, memo_text=None, memo_id=None, memo_hash=None,
+                 test_mode=True, trezor_mode=False):
     network_settings = get_network_settings(test_mode=test_mode)
     v1_mode = True
     if not trezor_mode:
@@ -120,7 +126,7 @@ def send_payment(wallet_file, asset, issuer, amount, destination, test_mode=True
     server = Server(network_settings.get("horizon_url"))
     account = server.load_account(account_id=k.public_key)
     if asset is None or issuer is None:
-        transaction = (
+        tb = (
             TransactionBuilder(
                 source_account=account,
                 network_passphrase=network_settings.get("network_passphrase"),
@@ -132,11 +138,10 @@ def send_payment(wallet_file, asset, issuer, amount, destination, test_mode=True
                 amount=str(amount),
             )
             .set_timeout(100)
-            .build()
         )
     else:
         stellar_asset = Asset(asset, issuer)
-        transaction = (
+        tb = (
             TransactionBuilder(
                 source_account=account,
                 network_passphrase=network_settings.get("network_passphrase"),
@@ -150,8 +155,14 @@ def send_payment(wallet_file, asset, issuer, amount, destination, test_mode=True
                 asset_issuer=stellar_asset.issuer,
             )
             .set_timeout(100)
-            .build()
         )
+    if memo_text is not None:
+        tb.add_text_memo(memo_text=memo_text)
+    elif memo_id is not None:
+        tb.add_id_memo(memo_id=memo_id)
+    elif memo_hash is not None:
+        tb.add_hash_memo(memo_hash=memo_hash)
+    transaction = tb.build()
     if not trezor_mode:
         transaction.sign(k)
     else:
