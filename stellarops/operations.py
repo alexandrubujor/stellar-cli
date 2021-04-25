@@ -1,10 +1,8 @@
-from stellar_sdk.asset import Asset
-from stellar_sdk.keypair import Keypair
-from stellar_sdk.network import Network
-from stellar_sdk.server import Server
-from stellar_sdk.transaction_builder import TransactionBuilder
+from stellar_sdk import Asset, Keypair, Network, Server, TransactionBuilder, Transaction, TransactionEnvelope
 from stellar_sdk.exceptions import BaseHorizonError
-from stellar_sdk.xdr import Xdr
+from stellar_sdk.xdr.decorated_signature import DecoratedSignature
+from stellar_sdk.xdr.signature_hint import SignatureHint
+from stellar_sdk.xdr.signature import Signature
 from trezorlib import stellar as trezor_stellar
 from trezorlib import tools as trezor_tools
 from trezorlib import messages
@@ -30,17 +28,23 @@ def get_network_settings(test_mode):
         }
 
 
-def create_stellar_wallet(wallet_file, generate_qr_code_link=False):
+def create_stellar_wallet(wallet_file, use_mnemonic=False, generate_qr_code_link=False):
     if os.path.exists(wallet_file):
         print("Error: Wallet file already exists! Will not overwrite it for security reasons.")
         return
     else:
-        keypair = Keypair.random()
+        if use_mnemonic:
+            mnemonic = Keypair.generate_mnemonic_phrase(strength=256)
+            keypair = Keypair.from_mnemonic_phrase(mnemonic)
+        else:
+            keypair = Keypair.random()
+            mnemonic = "NOT_USED"
         public_key = keypair.public_key
         private_key = keypair.secret
         write_wallet(wallet_file=wallet_file, private_key=private_key, public_key=public_key)
         response = {
             "public_key": public_key,
+            "mnemonic": mnemonic,
             "message": "A new keypair was generated for you and saved in {}. Initialize it by sending at least 1 XLM to {}".format(wallet_file, public_key)
         }
         print(json.dumps(response, indent=4))
@@ -55,10 +59,11 @@ def retrieve_stellar_wallet_public_key(wallet_file, generate_qr_code_link=False)
         print(generate_qr_code_url(public_key))
 
 
-
-def add_trust(wallet_file, asset, issuer, test_mode=True, trezor_mode=False):
+def add_trust(wallet_file, asset, issuer, test_mode=True, trezor_mode=False, vzero=False, timeout=3600):
     network_settings = get_network_settings(test_mode=test_mode)
-    v1_mode = True
+    if timeout is None:
+        timeout = 3600
+    v1_mode = not vzero
     if not trezor_mode:
         (private_key, public_key) = load_wallet(wallet_file=wallet_file)
         k = Keypair.from_secret(secret=private_key)
@@ -76,18 +81,23 @@ def add_trust(wallet_file, asset, issuer, test_mode=True, trezor_mode=False):
             base_fee=100,
             v1=v1_mode
         )
-            .append_change_trust_op(
-            asset_code=stellar_asset.code, asset_issuer=stellar_asset.issuer,
+        .append_change_trust_op(
+            asset_code=stellar_asset.code,
+            asset_issuer=stellar_asset.issuer,
         )
-        .set_timeout(100)
+        .set_timeout(timeout)
         .build()
     )
-    transaction.sign(k)
+    if not trezor_mode:
+        transaction.sign(k)
+    else:
+        transaction = sign_trezor_transaction(transaction, k,
+                                              network_passphrase=network_settings.get("network_passphrase"))
     try:
         transaction_resp = server.submit_transaction(transaction)
         print("{}".format(json.dumps(transaction_resp, indent=4)))
     except BaseHorizonError as e:
-        print(f"Error: {e}")
+        print("Error: {}".format(str(e)))
 
 
 def list_balances(wallet_file, test_mode=True, trezor_mode=False):
@@ -142,10 +152,14 @@ def list_transactions(wallet_file, test_mode=True, trezor_mode=False):
     print(json.dumps(response, indent=4))
 
 
-def send_payment(wallet_file, asset, issuer, amount, destination, memo_text=None, memo_id=None, memo_hash=None,
-                 test_mode=True, trezor_mode=False):
+def send_payment(wallet_file, asset, issuer, amount, destination,
+                 source=None,
+                 memo_text=None, memo_id=None, memo_hash=None,
+                 test_mode=True, trezor_mode=False, just_sign=False, vzero=False, timeout=3600):
     network_settings = get_network_settings(test_mode=test_mode)
-    v1_mode = True
+    if timeout is None:
+        timeout = 3600
+    v1_mode = not vzero
     if not trezor_mode:
         (private_key, public_key) = load_wallet(wallet_file=wallet_file)
         k = Keypair.from_secret(secret=private_key)
@@ -154,7 +168,10 @@ def send_payment(wallet_file, asset, issuer, amount, destination, memo_text=None
         k = Keypair.from_public_key(public_key=public_key)
         v1_mode = False
     server = Server(network_settings.get("horizon_url"))
-    account = server.load_account(account_id=k.public_key)
+    if source is None:
+        account = server.load_account(account_id=k.public_key)
+    else:
+        account = server.load_account(account_id=source)
     if asset is None or issuer is None:
         tb = (
             TransactionBuilder(
@@ -167,7 +184,7 @@ def send_payment(wallet_file, asset, issuer, amount, destination, memo_text=None
                 destination=destination,
                 amount=str(amount),
             )
-            .set_timeout(100)
+            .set_timeout(timeout)
         )
     else:
         stellar_asset = Asset(asset, issuer)
@@ -184,7 +201,7 @@ def send_payment(wallet_file, asset, issuer, amount, destination, memo_text=None
                 asset_code=stellar_asset.code,
                 asset_issuer=stellar_asset.issuer,
             )
-            .set_timeout(100)
+            .set_timeout(timeout)
         )
     if memo_text is not None:
         tb.add_text_memo(memo_text=memo_text)
@@ -198,11 +215,10 @@ def send_payment(wallet_file, asset, issuer, amount, destination, memo_text=None
     else:
         transaction = sign_trezor_transaction(transaction, k,
                                               network_passphrase=network_settings.get("network_passphrase"))
-    try:
-        transaction_resp = server.submit_transaction(transaction)
-        print("{}".format(json.dumps(transaction_resp, indent=4)))
-    except BaseHorizonError as e:
-        print(f"Error: {e}")
+    if just_sign:
+        print("TX SIGNED DATA:\n{}".format(transaction.to_xdr()))
+    else:
+        broadcast_tx(transaction=transaction, test_mode=test_mode)
 
 
 def get_asset_data_from_domain(asset_code, asset_domain):
@@ -225,6 +241,7 @@ def get_trezor_public_key():
     r = c.call(m)
     return r.address
 
+
 def generate_qr_code_url(public_key):
     url = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={}".format(public_key)
     return url
@@ -237,16 +254,67 @@ def retrieve_trezor_public_key(generate_qr_code_link=False):
         print(generate_qr_code_url(public_key))
 
 
-
 def sign_trezor_transaction(transaction, public_key, network_passphrase):
     xdr_data = transaction.to_xdr()
     address_n = trezor_tools.parse_path(trezor_stellar.DEFAULT_BIP32_PATH)
     tx, operations = trezor_stellar.parse_transaction_bytes(base64.b64decode(xdr_data))
     resp = trezor_stellar.sign_tx(client.get_default_client(), tx, operations, address_n, network_passphrase)
     signature = resp.signature
-    s_element = Xdr.types.DecoratedSignature(public_key.signature_hint(), signature)
+    s_element = DecoratedSignature(SignatureHint(public_key.signature_hint()), Signature(signature))
     transaction.signatures.append(s_element)
     return transaction
+
+
+def show_transaction_data(transaction):
+    print("\nYou are about to sign a new transaction with the following details:\n\n{}\n".format(str(transaction.transaction)))
+    print("The following operations are included in this transaction:\n")
+    for o in transaction.transaction.operations:
+        print("{}\n".format(str(o)))
+    confirmation = input("Would you like to sign this? (Enter SIGN to sign or anything else to cancel):")
+    if confirmation.strip() == "SIGN":
+        print("Signing\n")
+        return True
+    else:
+        print("Signing cancelled\n")
+        return False
+
+
+def sign_transaction_from_xdr(wallet_file, transaction_xdr, test_mode=True, trezor_mode=False, just_sign=False,
+                              vzero=False):
+    network_settings = get_network_settings(test_mode=test_mode)
+    if not trezor_mode:
+        transaction = TransactionEnvelope.from_xdr(transaction_xdr,
+                                                   network_passphrase=network_settings.get("network_passphrase"))
+        confirmation = show_transaction_data(transaction)
+        if not confirmation:
+            return
+        (private_key, public_key) = load_wallet(wallet_file=wallet_file)
+        k = Keypair.from_secret(secret=private_key)
+        transaction.sign(k)
+    else:
+        transaction = TransactionEnvelope.from_xdr(transaction_xdr,
+                                                   network_passphrase=network_settings.get("network_passphrase"))
+        confirmation = show_transaction_data(transaction)
+        if not confirmation:
+            return
+        public_key = get_trezor_public_key()
+        k = Keypair.from_public_key(public_key=public_key)
+        transaction = sign_trezor_transaction(transaction=transaction, public_key=k,
+                                              network_passphrase=network_settings.get("network_passphrase"))
+    if just_sign:
+        print("TX SIGNED DATA:\n{}".format(transaction.to_xdr()))
+    else:
+        broadcast_tx(transaction=transaction, test_mode=test_mode)
+
+
+def broadcast_tx(transaction, test_mode=True):
+    network_settings = get_network_settings(test_mode=test_mode)
+    server = Server(network_settings.get("horizon_url"))
+    try:
+        transaction_resp = server.submit_transaction(transaction)
+        print("{}".format(json.dumps(transaction_resp, indent=4)))
+    except BaseHorizonError as e:
+        print("Error: {}".format(str(e)))
 
 
 def get_asset_from_domain(asset_with_domain):

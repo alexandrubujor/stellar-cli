@@ -1,5 +1,5 @@
-stellar-sdk==2.8.1
-trezorlib==0.12.2
-toml==0.10.1
-urllib3==1.25.9
-cryptography==2.9.2
+stellar-sdk==3.3.0
+trezor==0.12.2
+toml==0.10.2
+urllib3==1.26.4
+cryptography==3.2.1
