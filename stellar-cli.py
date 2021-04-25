@@ -10,6 +10,7 @@ COMMAND_SEND_PAYMENT = "send_payment"
 COMMAND_LIST_TRANSACTIONS = "list_transactions"
 COMMAND_LIST_ASSET_BALANCE = "list_asset_balance"
 COMMAND_SIGN_TX = "sign_tx"
+COMMAND_SUBMIT_TX = "submit_tx"
 
 SUPPORTED_COMMANDS = {
     COMMAND_CREATE_WALLET: "",
@@ -19,7 +20,8 @@ SUPPORTED_COMMANDS = {
     COMMAND_LIST_ASSET_BALANCE: "",
     COMMAND_SEND_PAYMENT: "",
     COMMAND_LIST_TRANSACTIONS: "",
-    COMMAND_SIGN_TX: ""
+    COMMAND_SIGN_TX: "",
+    COMMAND_SUBMIT_TX: "",
 
 }
 
@@ -39,7 +41,7 @@ if __name__ == "__main__":
     parser.add_argument("--mnemonic", action="store_true", help="generate address from mnemonic")
     parser.add_argument("--vzero", action="store_true", help="use version zero of stellar TX")
     parser.add_argument("--timeout", type=int, help="Transaction validity in seconds")
-    group_wallet = parser.add_mutually_exclusive_group(required=True)
+    group_wallet = parser.add_mutually_exclusive_group(required=False)
     group_wallet.add_argument("-w", "--wallet", type=str, help="path to wallet file")
     group_wallet.add_argument("--trezor", action="store_true", help="use an attached Trezor")
     group_memo = parser.add_mutually_exclusive_group(required=False)
@@ -135,6 +137,11 @@ if __name__ == "__main__":
         operations.sign_transaction_from_xdr(wallet_file=wallet_file, transaction_xdr=transaction_xdr,
                                              test_mode=test_mode, trezor_mode=trezor_mode, just_sign=just_sign,
                                              vzero=vzero)
+    elif command == COMMAND_SUBMIT_TX:
+        transaction_xdr = input("Paste your TX XDR DATA:").strip()
+        if transaction_xdr is None or len(transaction_xdr) == 0:
+            "Missing TX XDR data."
+        operations.submit_transaction(transaction_xdr=transaction_xdr, test_mode=test_mode, vzero=vzero)
     elif command == COMMAND_LIST_TRANSACTIONS:
         operations.list_transactions(wallet_file=wallet_file, test_mode=test_mode, trezor_mode=trezor_mode)
 

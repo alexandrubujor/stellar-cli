@@ -12,7 +12,7 @@ import os
 import base64
 import json
 import toml
-import urllib.request
+import requests
 
 
 def get_network_settings(test_mode):
@@ -223,7 +223,8 @@ def send_payment(wallet_file, asset, issuer, amount, destination,
 
 def get_asset_data_from_domain(asset_code, asset_domain):
     toml_file = "https://{}/.well-known/stellar.toml".format(asset_domain)
-    toml_string = urllib.request.urlopen(toml_file).read().decode()
+    print(toml_file)
+    toml_string = requests.get(url=toml_file).text
     toml_data = toml.loads(toml_string)
     currencies = toml_data.get("CURRENCIES")
     for c in currencies:
@@ -279,6 +280,20 @@ def show_transaction_data(transaction):
         return False
 
 
+def show_transaction_data_before_submit(transaction):
+    print("\nYou are about to submit a new transaction with the following details:\n\n{}\n".format(str(transaction.transaction)))
+    print("The following operations are included in this transaction:\n")
+    for o in transaction.transaction.operations:
+        print("{}\n".format(str(o)))
+    confirmation = input("Would you like to submit this? (Enter SUBMIT to submit or anything else to cancel):")
+    if confirmation.strip() == "SUBMIT":
+        print("Broadcasting\n")
+        return True
+    else:
+        print("Broadcasting cancelled\n")
+        return False
+
+
 def sign_transaction_from_xdr(wallet_file, transaction_xdr, test_mode=True, trezor_mode=False, just_sign=False,
                               vzero=False):
     network_settings = get_network_settings(test_mode=test_mode)
@@ -303,6 +318,17 @@ def sign_transaction_from_xdr(wallet_file, transaction_xdr, test_mode=True, trez
                                               network_passphrase=network_settings.get("network_passphrase"))
     if just_sign:
         print("TX SIGNED DATA:\n{}".format(transaction.to_xdr()))
+    else:
+        broadcast_tx(transaction=transaction, test_mode=test_mode)
+
+
+def submit_transaction(transaction_xdr, test_mode=True, vzero=False):
+    network_settings = get_network_settings(test_mode=test_mode)
+    transaction = TransactionEnvelope.from_xdr(transaction_xdr,
+                                               network_passphrase=network_settings.get("network_passphrase"))
+    confirmation = show_transaction_data_before_submit(transaction)
+    if not confirmation:
+        return
     else:
         broadcast_tx(transaction=transaction, test_mode=test_mode)
 
