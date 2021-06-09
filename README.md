@@ -17,6 +17,8 @@ This CLI client supports the following operations:
 * **list_asset_balance** - display balances (requires wallet_file / trezor, asset code, asset issuer)
 * **send_payment** - send payment (requires wallet_file / trezor, asset code, asset issuer address, payment amount, destination address)
 * **list_transactions** - display transactions (requires wallet_file / trezor)
+* **sign_tx** - sign a given transaction (requires wallet_file / trezor)
+* **submit_tx** - just submit a TX to Stellar network (doesn't require wallet_file / trezor)
 
 Assets can be specified as either -a ASSETCODE -i ISSUER_ADDRESS or -a ASSETCODE@domain.com (you don't need to specify the issuer address in this case)
 
@@ -26,14 +28,19 @@ Both test and production networks supported (see -t switch).
 * **-t, --test** - test mode, uses testnet
 * **-w, --wallet** - wallet file path
 * **--trezor** - use attached Trezor
+* **--justsign** - just sign the transaction, don't submit it
 * **-a, --asset** - asset code (or ASSETCODE@domain.com format, eg. 'TCBT@thecryptobanker.com')
 * **-i, --issuer** - issuer wallet address not needed if asset is specified as ASSETCODE@domain.com
-* **-d, --destination** - wallet destination address
+* **-d, --destination** - wallet destination address (SEP-0002 federation addresses supported, eg. a*gostellar.io)
 * **-p, --amount** - payment amount
 * **--memo-id** - Stellar memo ID for payment TX
 * **--memo-text** - Stellar memo Text for payment TX
 * **--memo-hash** - Stellar memo Hash for payment TX
+* **--timeout** - set a timeout in seconds for the transaction
 * **--qrlink** - generate an URL taking you to a QR code with the address of your wallet
+* **--vzero** - use V0 transaction format (Trezor supports only V0 format)
+* **--mnemonic** - generate a new Stellar wallet from a SEP-0005 mnemonic (not just random bytes). Used for new wallet creation only.
+
 
 ## Examples ##
 
@@ -73,3 +80,4 @@ Both test and production networks supported (see -t switch).
 
 `python stellar-cli.py -t -w test_wallet.json send_payment -p 10 -d GATU7FV3IOUI4M6QWQXWSDUVTJJKD7ONJSBOJ4IJEETE5SPBW6JHAI22`
 
+Donations in XLM accepted **GCT4F7MAJ5LB4VOGMEGACG2FKFWEEQ5RCPONB65HI7HK4V7IQD4YQ6ZK**
