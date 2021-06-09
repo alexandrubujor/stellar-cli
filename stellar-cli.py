@@ -117,8 +117,9 @@ if __name__ == "__main__":
         if asset is not None and issuer is None:
             print("Could not identify asset. Please provide issuer or use -a ASSET_CODE@domain.com format")
             sys.exit(1)
+        destination = operations.process_destination_address(address=destination)
         if destination is None:
-            print("Missing destination address.")
+            print("Missing/invalid destination address.")
             sys.exit(1)
         if amount is None:
             print("Missing amount.")

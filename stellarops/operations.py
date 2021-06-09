@@ -223,7 +223,7 @@ def send_payment(wallet_file, asset, issuer, amount, destination,
 
 def get_asset_data_from_domain(asset_code, asset_domain):
     toml_file = "https://{}/.well-known/stellar.toml".format(asset_domain)
-    print(toml_file)
+    print("Loading TOML content from: {}\n".format(toml_file))
     toml_string = requests.get(url=toml_file).text
     toml_data = toml.loads(toml_string)
     currencies = toml_data.get("CURRENCIES")
@@ -358,3 +358,36 @@ def get_asset_from_domain(asset_with_domain):
             asset = asset_code
             issuer = asset_issuer
             return asset, issuer, asset_domain
+
+
+def translate_address(account_name, account_domain):
+    toml_file = "https://{}/.well-known/stellar.toml".format(account_domain)
+    print("Loading TOML content from: {}\n".format(toml_file))
+    toml_string = requests.get(url=toml_file).text
+    toml_data = toml.loads(toml_string)
+    federation_server_url = toml_data.get("FEDERATION_SERVER")
+    print("Using FEDERATION Server: {}\n".format(federation_server_url))
+    query_url = "{}?q={}*{}&type=name".format(federation_server_url, account_name, account_domain)
+    r = requests.get(url=query_url)
+    r.raise_for_status()
+    response_json = json.loads(r.text)
+    address = response_json.get("account_id")
+    return address
+
+
+def process_destination_address(address):
+    if address is None:
+        print("Missing address.\n")
+        return None
+    full_address = address.strip()
+    if '*' in address:
+        account_name, account_domain = full_address.split('*', 1)
+        try:
+            translated_address = translate_address(account_name=account_name, account_domain=account_domain)
+            print("{} --- translated to ---> {}\n".format(full_address, translated_address))
+            return translated_address
+        except Exception as e:
+            print("Could not identify address using Federation server. Error: {}\n".format(str(e)))
+            return None
+    else:
+        return full_address
