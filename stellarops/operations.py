@@ -15,6 +15,9 @@ import toml
 import requests
 
 
+BASE_FEE = 5000
+
+
 def get_network_settings(test_mode):
     if test_mode:
         return {
@@ -78,12 +81,11 @@ def add_trust(wallet_file, asset, issuer, test_mode=True, trezor_mode=False, vze
         TransactionBuilder(
             source_account=account,
             network_passphrase=network_settings.get("network_passphrase"),
-            base_fee=100,
+            base_fee=BASE_FEE,
             v1=v1_mode
         )
         .append_change_trust_op(
-            asset_code=stellar_asset.code,
-            asset_issuer=stellar_asset.issuer,
+            asset=Asset(code=stellar_asset.code, issuer=stellar_asset.issuer),
         )
         .set_timeout(timeout)
         .build()
@@ -177,10 +179,11 @@ def send_payment(wallet_file, asset, issuer, amount, destination,
             TransactionBuilder(
                 source_account=account,
                 network_passphrase=network_settings.get("network_passphrase"),
-                base_fee=100,
+                base_fee=BASE_FEE,
                 v1=v1_mode
             )
             .append_payment_op(
+                asset=Asset.native(),
                 destination=destination,
                 amount=str(amount),
             )
@@ -192,14 +195,13 @@ def send_payment(wallet_file, asset, issuer, amount, destination,
             TransactionBuilder(
                 source_account=account,
                 network_passphrase=network_settings.get("network_passphrase"),
-                base_fee=100,
+                base_fee=BASE_FEE,
                 v1=v1_mode
             )
             .append_payment_op(
                 destination=destination,
                 amount=str(amount),
-                asset_code=stellar_asset.code,
-                asset_issuer=stellar_asset.issuer,
+                asset=Asset(code=stellar_asset.code, issuer=stellar_asset.issuer)
             )
             .set_timeout(timeout)
         )
